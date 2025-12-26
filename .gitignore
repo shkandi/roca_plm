@@ -25,3 +25,5 @@
 db/
 */incremental_db/
 incremental_db/
+greybox_tmp/
+*/greybox_tmp/
