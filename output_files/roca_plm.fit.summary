@@ -1,0 +1,16 @@
+Fitter Status : Successful - Fri Dec 26 14:58:43 2025
+Quartus Prime Version : 16.1.0 Build 196 10/24/2016 SJ Lite Edition
+Revision Name : roca_plm
+Top-level Entity Name : roca_plm
+Family : Cyclone IV E
+Device : EP4CE6E22C8
+Timing Models : Final
+Total logic elements : 726 / 6,272 ( 12 % )
+    Total combinational functions : 666 / 6,272 ( 11 % )
+    Dedicated logic registers : 327 / 6,272 ( 5 % )
+Total registers : 327
+Total pins : 18 / 92 ( 20 % )
+Total virtual pins : 0
+Total memory bits : 0 / 276,480 ( 0 % )
+Embedded Multiplier 9-bit elements : 0 / 30 ( 0 % )
+Total PLLs : 1 / 2 ( 50 % )

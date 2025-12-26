@@ -1,0 +1,278 @@
+-- reg_op.vhd
+-- Автмат работы взаимодействия с регистрами
+
+LIBRARY ieee;
+
+USE ieee.std_logic_1164.all;
+USE ieee.std_logic_unsigned.all;
+USE ieee.std_logic_arith.all;
+
+entity reg_op is
+port (
+	reset: in std_logic; -- Сброс
+	clk: in std_logic; -- Такт
+	scan_pin: in std_logic; -- Управляющий пин скана
+	ramlast_adr: in std_logic_vector(13 downto 0); -- Адрес последнего записанного байта в RAM
+	ua_regadr: in std_logic_vector (3 downto 0); -- Адрес регистра из UART
+	ua_regcom: in std_logic_vector (2 downto 0); -- Комманда для автомата регистра
+	data_uaregw: in std_logic_vector (7 downto 0); -- Дата для записи в регистр из UART
+	data_uaregr: out std_logic_vector (7 downto 0); -- Дата для UART из регистра
+	fcrate_adr: out std_logic_vector (1 downto 0); -- Адрес для фильтра крейта
+	fslot_adr: out std_logic_vector (3 downto 0); -- Адрес для фильтра слота
+	p_reset: out std_logic; -- Программный сброс
+	eigen_flag: out std_logic; -- Флаг записи своей шины
+	fremd_flag: out std_logic; -- Флаг записи чужой шины
+	fcrate_flag: out std_logic; -- Флаг фильтра по адресу крейта
+	fslot_flag: out std_logic; -- Флаг фильтра по адресу слота
+	scan_flag: buffer std_logic; -- Флаг работы скана шины
+	ramfull_flag: in std_logic; -- Флаг заполненной памяти
+	uaregr_trig: in std_logic; -- Триггер чтения регистра от UART
+	uaregw_trig: in std_logic; -- Триггер записи в регистр от UART
+	uaregr_rdy_trig: buffer std_logic -- Триггер гтовых данных для UART
+);		
+end reg_op;
+
+architecture Behavioral of reg_op is
+
+constant rcom_timer: integer:= 50; -- Таймер выдержки активации команды
+
+signal reg_adr: natural range 0 to 15; -- Адреса регистров для приведения
+signal sto_trig: std_logic:= '0'; -- Триггер завершения времени скана
+
+-- Массив для регистров управления 
+type regin is array (0 to 15) of std_logic_vector (7 downto 0);
+
+signal def_reg: regin:= (
+0 => x"ba", 1 => x"00", 2 => x"00", 3 => x"00", 4 => x"00", 
+5 => x"00", 6 => x"00", 7 => x"00", 8 => x"04", 9 => x"00",
+10 => x"03", 11 => x"00", 12 => x"00", 13 => x"00", 14 => x"00",
+15 => x"00");
+
+signal reg_in: regin:= (
+0 => x"ba", 1 => x"00", 2 => x"00", 3 => x"00", 4 => x"00", 
+5 => x"00", 6 => x"00", 7 => x"00", 8 => x"04", 9 => x"00",
+10 => x"03", 11 => x"00", 12 => x"00", 13 => x"00", 14 => x"00",
+15 => x"00");
+	
+Begin
+
+-- Register operator
+-- Автомат работы с регистрами		
+process (clk)
+variable state: integer range 0 to 31; -- Состояние
+variable count: integer range 0 to 510; -- Таймер ОН
+variable uaregr_ctg: std_logic; -- Проверочный триггер UART чтение
+variable uaregw_ctg: std_logic; -- Проверочный триггер UART запись
+begin	
+if (reset = '0') then -- Сброс
+	uaregr_ctg:= uaregr_trig; -- Ставим проверочный триггер
+	uaregw_ctg:= uaregw_trig; -- Ставим проверочный триггер
+	p_reset <= '1';
+	state:= 0;
+	count:= 0;
+elsif (rising_edge(clk) and reset = '1') then
+	if (state = 0) then -- Состояние 0. Установка стандартных значний регистров
+		if (count < 16) then
+			count:= count + 1;
+			reg_in(count) <= def_reg(count);
+		else
+			count:= 0;
+			state:= 1;
+		end if;
+	elsif (state = 1) then -- Состояние 1. Установка знчений регистров по признакам
+		
+		-- Проверяем флаг скана
+		if (scan_flag = '0') then
+			reg_in(7)(0) <= '0';
+		end if;
+		
+		-- Проверяем флаг полной памяти
+		if (ramfull_flag = '1') then
+			reg_in(2)(0) <= '1';
+		else
+			reg_in(2)(0) <= '0';
+		end if;
+		
+		-- Пишем адрес последнего байта
+		reg_in(5)(5 downto 0) <= ramlast_adr(13 downto 8);
+		reg_in(6) <= ramlast_adr(7 downto 0);
+			
+		state:= 2;
+	elsif (state = 2) then -- Состояние 2. Просмотр знчаений регистров и простые действия
+		
+		-- Просмотр признака сброса
+		if (reg_in(7)(7) = '0') then
+			p_reset <= '1';
+		elsif (reg_in(7)(7) = '1') then
+			p_reset <= '0';
+		end if;
+		
+		-- Просмотр признака записи своей шины
+		if (reg_in(10)(0) = '1') then
+			eigen_flag <= '1';
+		elsif (reg_in(10)(0) = '0') then
+			eigen_flag <= '0';
+		end if;
+		
+		-- Просмотр признака записи чужой шины
+		if (reg_in(10)(1) = '1') then
+			fremd_flag <= '1';
+		elsif (reg_in(10)(1) = '0') then
+			fremd_flag <= '0';
+		end if;
+		
+		-- Просмотр признака фильтра по крейту
+		if (reg_in(10)(2) = '1') then
+			fcrate_flag <= '1';
+			fcrate_adr <= reg_in(11)(1 downto 0);
+		elsif (reg_in(10)(2) = '0') then
+			fcrate_flag <= '0';
+			fcrate_adr <= "11";
+		end if;
+		
+		-- Просмотр признака фильтра по слоту
+		if (reg_in(10)(3) = '1') then
+			fslot_flag <= '1';
+			fslot_adr <= reg_in(12)(3 downto 0);
+		elsif (reg_in(10)(3) = '0') then
+			fslot_flag <= '0';
+			fslot_adr <= "1111";
+		end if;
+			
+		state:= 10; -- Переход на просмотр триггеров UART
+		
+	-- UART чтение
+	elsif (state = 10) then -- Состояние 10. Просмотр триггера UART чтения из регистра
+		if (uaregr_trig /= uaregr_ctg) then -- Если есть триггер чтения
+			uaregr_ctg:= uaregr_trig; -- Ставим проверочный триггер
+			reg_adr <= conv_integer(unsigned(ua_regadr)); -- Конверт std_logic_vector в natural
+			state:= 11; -- Переходим к чтению из регистра
+		else
+			state:= 20; -- Если нет, то переходим к просмотру триггера записи
+		end if;
+	elsif (state = 11) then -- Состояние 11. Чтение из регистра
+		if (reg_adr < 64) then -- Проверяем что адрес входит в 0-63
+			data_uaregr <= reg_in(reg_adr); -- Читаем данные
+			uaregr_rdy_trig <= not uaregr_rdy_trig; -- Ставим триггер
+		else
+			data_uaregr <= x"00"; -- Если адрес вне регистров, то загружаем 0
+		end if;
+		state:= 20; -- Просмотр триггера записи
+		
+	
+	-- UART запись
+	elsif (state = 20) then -- Состояние 20. Просмотр триггера UART записи в регистр
+		if (uaregw_trig /= uaregw_ctg) then -- Если есть триггер записи
+			uaregw_ctg:= uaregw_trig; -- Ставим проверочный триггер
+			reg_adr <= conv_integer(unsigned(ua_regadr)); -- Конверт std_logic_vector в natural
+			state:= 21; -- Переходим к записи в регистр
+		else
+			state:= 1; -- Если нет, то возвращаемся на 1 состояние
+		end if;
+	elsif (state = 21) then -- Состояние 21. Проверяем что адрес в допустимом пространестве и не ro
+		if (reg_adr > 6) then
+			state:= 22;
+		else
+			state:= 1; -- Если read only, то возвращаемся на 1 состояние
+		end if;
+	elsif (state = 22) then -- Состояние 22. Запись в регистр в зависимости от комманды  
+		if (ua_regcom = "010") then -- Запись простая
+			reg_in(reg_adr) <= data_uaregw; 
+		elsif (ua_regcom = "100") then -- Записываем с AND
+			reg_in(reg_adr) <= reg_in(reg_adr) and data_uaregw;
+		elsif (ua_regcom = "101") then -- Записываем с OR
+			reg_in(reg_adr) <= reg_in(reg_adr) or data_uaregw;
+		end if;
+		state:= 30; -- На состояние 30
+		
+	elsif (state = 30) then -- Стостояние 30. Таймер выдержки для акттвации команды
+		if (count < rcom_timer) then -- Таймер выдержки команды
+			count:= count + 1;
+		else
+			count:= 0;
+			state:= 1;
+		end if;
+	end if;
+end if;
+end process;
+
+
+
+-- Управление сканом.
+process (clk)
+variable state: integer range 0 to 7;
+variable sto_ctg: std_logic:= '0'; -- Проверочный триггер таймера
+begin
+if (reset = '0') then -- Сброс
+	sto_ctg:= sto_trig; -- Ставим проверочный триггер
+	state:= 0;
+elsif (rising_edge(clk) and reset = '1') then
+	if (state = 0) then -- Состояние 0. Управление Сканом от регистра
+		if (reg_in(7)(0) = '0') then
+			scan_flag <= '0';
+		elsif (reg_in(7)(0) = '1') then
+			if (scan_flag = '0') then
+				scan_flag <= '1';
+				sto_ctg:= sto_trig; -- Обнуляем триггер остановки по времени
+			else  -- Остановка по триггеру времени
+				if (sto_trig /= sto_ctg) then
+					scan_flag <= '0';
+					state:= 1; -- На состояние ожидания
+				end if;
+			end if;
+		end if;
+	elsif (state = 1) then -- Состояние 1. Ожидание обновления регистра Скана
+		if (reg_in(7)(0) = '0') then
+			state:= 0;
+		end if;
+	end if;	
+end if;	
+end process;
+
+
+
+-- Таймер времени скана.
+process (clk)
+variable s_time: std_logic_vector(15 downto 0);
+variable count: integer range 0 to 51000;
+variable state: integer range 0 to 7;
+begin
+if (reset = '0') then -- Сброс
+	count:= 0;
+	state:= 0;
+elsif (rising_edge(clk) and reset = '1') then
+	if (state = 0) then -- Состояние 0. Установка переменных.
+		s_time:= x"0000";
+		state:= 1;
+	elsif (state = 1) then -- Состояние 1. Просмотр флага скана
+		if (scan_flag = '1') then
+			s_time(15 downto 8):= reg_in(8); -- Загружаем время скана из регистров
+			s_time(7 downto 0):= reg_in(9);
+			state:= 2;
+		end if;
+	elsif (state = 2) then -- Состояние 2. Таймер скана
+		if (scan_flag = '1') then
+			if (s_time < x"0001") then
+				sto_trig <= not sto_trig;
+				state:= 3; -- Переходим на ожидание флага скана = 0
+			else 
+				if (count < 50000) then
+					count:= count + 1;
+				else
+					count:= 0;
+					s_time:= s_time - 1;
+				end if;
+			end if;
+		else
+			count:= 0;
+			state:= 0;
+		end if;
+	elsif (state = 3) then -- Состояние 3. Ожтдание флага скана = 0
+		if (scan_flag = '0') then
+			state:= 0;
+		end if;
+	end if;	
+end if;	
+end process;
+
+End;		

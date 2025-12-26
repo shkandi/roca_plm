@@ -1,0 +1,14 @@
+Analysis & Synthesis Status : Successful - Fri Dec 26 14:58:29 2025
+Quartus Prime Version : 16.1.0 Build 196 10/24/2016 SJ Lite Edition
+Revision Name : roca_plm
+Top-level Entity Name : roca_plm
+Family : Cyclone IV E
+Total logic elements : 851
+    Total combinational functions : 666
+    Dedicated logic registers : 327
+Total registers : 327
+Total pins : 18
+Total virtual pins : 0
+Total memory bits : 0
+Embedded Multiplier 9-bit elements : 0
+Total PLLs : 1
