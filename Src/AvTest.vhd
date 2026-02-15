@@ -76,13 +76,13 @@ architecture beh1 of AvTest is
     
 begin
 	
-	process(Clk)
-	begin
-		if rising_edge(Clk) then
-			Led <= Cnt(Cnt'left);
-			Cnt <= Cnt + '1';
-		end if;
-	end process;
+--	process(Clk)
+--	begin
+--		if rising_edge(Clk) then
+--			Led <= Cnt(Cnt'left);
+--			Cnt <= Cnt + '1';
+--		end if;
+--	end process;
 	
 --	uart_ent:
 --	uart
