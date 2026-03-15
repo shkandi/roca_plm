@@ -23,17 +23,18 @@ architecture beh1 of uart is
     constant CntRxMax: integer := pFreq/(pBaudRate*9);
     constant CntTxMax: integer := pFreq/pBaudRate;
 
-    type StateType is (S0,S1,S2);
+    type StateType is (S0,S1);
     signal RxState: StateType;
 
-    signal SmplCntSr: std_logic_vector(7 downto 0);
+    signal SmplEnSr: std_logic_vector(7 downto 0);
+    signal SmplCntSr: std_logic_vector(8 downto 0);
     signal SmplSr: std_logic_vector(4 downto 0);
     signal RxDataSr: std_logic_vector(9 downto 0);
     signal RxBusySr: std_logic_vector(9 downto 0);
     signal CntRx: integer range 0 to pFreq/(pBaudRate*9); 
 
     signal TxBusySr : std_logic_vector (9 downto 0);
-    signal TxDaraSr : std_logic_vector (9 downto 0);
+    signal TxDaraSr : std_logic_vector (9 downto 0) := "1111111111";
     signal CntTx : integer range 0 to pFreq/pBaudRate;
 
 begin
@@ -54,37 +55,46 @@ begin
                     RxBusySr <= (others => '0');
                     EnOut <= '0';
                     CntRx <= 0;
+                    SmplEnSr <= (others => '0');
                     SmplCntSr <= (others => '0');
                     SmplSr <= (others => '0');
                 when S1 =>
                     if CntRx = CntRxMax then                      
-                        if SmplCntSr(SmplCntSr'left) = '1' then
-                            SmplCntSr <= (others => '0');
-                            RxDataSr <= SmplSr(SmplSr'left) & RxDataSr(RxDataSr'left downto 1);
-                            RxBusySr <= RxBusySr(RxBusySr'left - 1 downto 0) & "1";
-                            SmplSr <= (others => '0');
+                        if SmplEnSr(SmplEnSr'left) = '1' then
+                            SmplEnSr <= (others => '0');
                         else
-                            SmplCntSr <= SmplCntSr(SmplCntSr'left - 1 downto 0) & "1";
-                            
-                            if Rx = '1' then
-                                SmplSr <= SmplSr(SmplSr'left - 1 downto 0) & "1";
-                            end if;
+                            SmplEnSr <= SmplEnSr(SmplEnSr'left - 1 downto 0) & "1";
                         end if;
                     end if;
                     
-                    if RxBusySr(RxBusySr'left) = '1' then
-                        RxState <= S2;
+                    if SmplEnSr(2) = '1' then
+                        SmplCntSr <= SmplCntSr(SmplCntSr'left - 1 downto 0) & "1";
+
+                        if Rx = '1' then
+                            SmplSr <= SmplSr(SmplSr'left - 1 downto 0) & "1";
+                        end if;
+                    else
+                        SmplCntSr <= (others => '0');
+                        SmplSr <= (others => '0');
                     end if;
+
+                    if SmplCntSr(8 downto 7) = "01" then
+                        RxDataSr <= SmplSr(SmplSr'left) & RxDataSr(RxDataSr'left downto 1);
+                        RxBusySr <= RxBusySr(RxBusySr'left - 1 downto 0) & "1";
+                    end if;
+
+                    if RxBusySr(RxBusySr'left) = '1' or (RxBusySr(1 downto 0) = "01" and RxDataSr(9) = '1') then
+                        RxState <= S0;
+                    end if;
+
+                    EnOut <= not RxDataSr(0) and RxDataSr(9) and RxBusySr(RxBusySr'left);
+                    DataOut <= RxDataSr(8 downto 1);
                     
                     if CntRx = CntRxMax then
                         CntRx <= 0;
                     else
                         CntRx <= CntRx + 1;
                     end if;
-                when S2 =>
-                    RxState <= S0;
-                    DataOut <= RxDataSr(8 downto 1);
-                    EnOut <= not RxDataSr(0) and RxDataSr(9);
                 when others =>
                     null;
             end case;
@@ -102,8 +112,10 @@ begin
     begin
        if rising_edge(Clk) then
             if TxBusySr(0) = '0' then
+                TxDaraSr(9 downto 1) <= '1' & DataIn;
+                TxDaraSr(0) <= not EnIn;
+
                 if EnIn = '1' then
-                    TxDaraSr <= '1' & DataIn & '0';
                     TxBusySr <= (others => '1');
                 end if;
 
