@@ -106,7 +106,7 @@ begin
     -----------------------------------------------------------------------
 
     Tx <= TxDaraSr(0);
-    TxBusy <= TxBusySr(0);
+    TxBusy <= TxBusySr(0) or EnIn;
 
     process(Clk)
     begin

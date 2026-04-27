@@ -6,7 +6,7 @@ use ieee.numeric_std.all;
 entity TestMem is
     port(
         AvWrData        : in std_logic_vector(7 downto 0);
-        AvAddr          : in std_logic_vector(7 downto 0);
+        AvAddr          : in std_logic_vector(3 downto 0);
         AvRdData        : out std_logic_vector(7 downto 0);
         AvWrRq          : in std_logic;
         AvRdRq          : in std_logic;
@@ -16,11 +16,8 @@ entity TestMem is
 end TestMem;
 
 architecture beh1 of TestMem is
-    type RamType is array(255 downto 0) of std_logic_vector(7 downto 0);
+    type RamType is array(15 downto 0) of std_logic_vector(7 downto 0);
     signal Ram: RamType;
-
-    signal Din: std_logic_vector(7 downto 0);
-    signal Q: std_logic_vector(7 downto 0);
 begin
 
     AvRdDv <= AvRdRq when rising_edge(Clk);

@@ -1,14 +1,15 @@
+--! полнодуплексная реализация сопряжения uart и avalon-mm
+--! в основе лежит предположение, что латентность uart минимум в 10 раз выше чем у avalon-mm
+
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.std_logic_arith.all;
+use ieee.std_logic_unsigned.all;
 
 
 entity AvUart is
-    generic(
-        pFreq           : integer := 50000000;
-        pBaudRate       : integer := 9600
-    );
     port(
-        AvAddr              : out std_logic_vector(7 downto 0);
+        AvAddr              : out std_logic_vector(5 downto 0);
         AvWrData            : out std_logic_vector(7 downto 0);
         AvRdData            : in std_logic_vector(7 downto 0);
         AvWrRq              : out std_logic;
@@ -16,99 +17,66 @@ entity AvUart is
         AvWaitRq            : in std_logic;
         AvRdDv              : in std_logic;
         Clk                 : in std_logic;
-        UartRx              : in std_logic;
-        UartTx              : out std_logic
+        UartBusy            : in std_logic;
+        DataRx              : in std_logic_vector(7 downto 0);
+        EnRx                : in std_logic;
+        DataTx              : out std_logic_vector(7 downto 0);
+        EnTx                : out std_logic
     );
 end AvUart;
 
 architecture beh1 of AvUart is
-    component uart is
-    generic(
-        pFreq           : integer := 50000000;
-        pBaudRate       : integer := 9600
-    );
-    port(
-        DataIn          : in std_logic_vector(7 downto 0);
-        EnIn            : in std_logic;
-        Clk             : in std_logic;
-        Rx              : in std_logic;
-        Tx              : out std_logic;
-        TxBusy          : out std_logic;
-        DataOut         : out std_logic_vector(7 downto 0);
-        EnOut           : out std_logic
-    );
-    end component uart;
+    type GProcStType is (Idle, GetCmd);
+    signal GProcSt: GProcStType;
+    type WrProcStType is (Idle, OpSt, WrSt);
+    signal WrProcSt: WrProcStType;
+    type RdProcStType is (Idle, HdrSt, RdSt);
+    signal RdProcSt: RdProcStType;
 
-    signal DataRx: std_logic_vector(7 downto 0);
-    signal EnRx: std_logic;
-    signal DataRxSr: std_logic_vector(15 downto 0);
-    signal DataTx: std_logic_vector(7 downto 0);
-    signal EnTx: std_logic;
-
-    type StateType is (Idle, GetCmd, GetAddr, GetWrData, WrSt, RdSt);
-    signal State: StateType;
-    signal CmdRg: std_logic;
+    signal EnWrProc: std_logic;
+    signal EnRdProc: std_logic;
+    signal WrOp: std_logic_vector(1 downto 0);
+    signal CntMaxRg: std_logic_vector(3 downto 0);
+    signal WrCntMax: std_logic_vector(3 downto 0);
+    signal RdCntMax: std_logic_vector(3 downto 0);
+    signal IncAddrW: std_logic;
+    signal IncAddrR: std_logic;
+    signal WrDataBuf: std_logic_vector(7 downto 0);
+    signal AvAddrRg: std_logic_vector(5 downto 0);
+    signal AvAddrW: std_logic_vector(5 downto 0);
+    signal AvAddrR: std_logic_vector(5 downto 0);
+    signal AvWrRqW: std_logic;
+    signal AvRdRqW: std_logic;
+    signal AvRdRqR: std_logic;
+    signal WrCnt: std_logic_vector(3 downto 0);
+    signal RdCnt: std_logic_vector(3 downto 0);
+    signal Sel: std_logic;      -- wr/rd access to avalon bus; 1 - wr; 0 - rd;
 begin
-
-    uart_ent:
-    uart
-    generic map(
-        pFreq           => pFreq,            -- : integer := 50000000;
-        pBaudRate       => pBaudRate            -- : integer := 9600
-    )
-    port map(
-        DataIn          => DataTx,                -- : in std_logic_vector(7 downto 0);
-        EnIn            => EnTx,                -- : in std_logic;
-        Clk             => Clk,                -- : in std_logic;
-        Rx              => UartRx,                -- : in std_logic;
-        Tx              => UartTx,                -- : out std_logic;
-        TxBusy          => open,                -- : out std_logic;
-        DataOut         => DataRx,                -- : out std_logic_vector(7 downto 0);
-        EnOut           => EnRx                -- : out std_logic
-    );
-
+    
+    cmd_rx_proc:
     process(Clk)
     begin
         if rising_edge(Clk) then
-            case State is
+            case GProcSt is
                 when Idle =>
-                    if DataRx = x"55" and EnRx = '1' then
-                        State <= GetCmd;
+                    if DataRx(7 downto 4) = x"A" and EnRx = '1' then
+                        GProcSt <= GetCmd;
+                        CntMaxRg<= DataRx(3 downto 0);
                     end if;
 
-                    AvWrRq <= '0';
-                    AvRdRq <= '0';
-                    EnTx <= '0';
+                    EnWrProc <= '0';
+                    EnRdProc <= '0';
                 when GetCmd =>
                     if EnRx = '1' then
-                        State <= GetAddr;
-                        CmdRg <= DataRx(0);
-                    end if;
-                when GetAddr =>
-                    if EnRx = '1' then
-                        AvAddr <= DataRx;
-                        AvRdRq <= not CmdRg;
+                        GProcSt <= Idle;
 
-                        if CmdRg = '1' then
-                            State <= GetWrData;
-                        else
-                            State <= RdSt;
+                        EnWrProc <= DataRx(7) or DataRx(6);
+                        EnRdProc <= not (DataRx(7) or DataRx(6));
+                        AvAddrRg <= DataRx(5 downto 0);
+
+                        if (DataRx(7) or DataRx(6)) = '1' then
+                            WrOp <= DataRx(7 downto 6);
                         end if;
-                    end if;
-                when GetWrData =>
-                    if EnRx = '1' then
-                        AvWrData <= DataRx;
-                        State <= WrSt;
-                        AvWrRq <= '1';
-                    end if;
-                when WrSt =>
-                    State <= Idle;
-                    AvWrRq <= '0';
-                when RdSt =>
-                    if AvRdDv = '1' then
-                        State <= Idle;
-                        DataTx <= AvRdData;
-                        EnTx <= '1';
                     end if;
                 when others =>
                     null;
@@ -116,5 +84,114 @@ begin
         end if;
     end process;
 
-    
+    wr_proc:
+    process(Clk)
+    begin
+        if rising_edge(Clk) then
+            case WrProcSt is
+                when Idle =>
+                    AvWrRqW <= '0';
+                    AvRdRqW <= EnWrProc and WrOp(1);
+                    WrCnt <= x"0";
+                    WrDataBuf <= (others => '1');
+
+                    if EnWrProc = '1' then
+                        WrCntMax <= CntMaxRg;
+                        WrProcSt <= OpSt;
+                        AvAddrW <= AvAddrRg;
+                    end if;     
+                when OpSt =>
+                    AvRdRqW <= '0';
+
+                    if (WrOp(1) and AvRdDv and Sel) = '1' then
+                        WrDataBuf <= AvRdData;
+                    end if;
+
+                    if WrOp(1) = '0' or (WrOp(1) and AvRdDv and Sel) = '1' then
+                        WrProcSt <= WrSt;
+                    end if;
+                when WrSt =>
+                    if EnRx = '1' then
+                        if WrOp(0) = '1' then
+                            AvWrData <= DataRx and WrDataBuf;
+                        else
+                            AvWrData <= DataRx or WrDataBuf;
+                        end if;
+                    end if;
+
+                    if IncAddrW = '1' then
+                        AvAddrW <= AvAddrW + '1';
+                        WrCnt <= WrCnt + '1';
+
+                        if WrCnt = WrCntMax then
+                            WrProcSt <= Idle;
+                        else
+                            WrProcSt <= OpSt;
+                            AvRdRqW <= WrOp(1);
+                        end if;
+                    end if;
+
+                    AvWrRqW <= EnRx;
+                    IncAddrW <= EnRx;
+                when others =>
+                    null;
+            end case;
+        end if;                  
+    end process;
+
+    rd_proc:
+    process(Clk)
+    begin
+        if rising_edge(Clk) then
+            case RdProcSt is
+                when Idle =>
+                    RdCnt <= x"0";
+
+                    if EnRdProc = '1' then
+                        AvAddrR <= AvAddrRg;
+                        RdCntMax <= CntMaxRg;
+                        RdProcSt <= HdrSt;
+                        DataTx <= x"A" & RdCntMax;
+                        EnTx <= '1';
+                    end if;
+                when HdrSt =>
+                    DataTx <= "00" & AvAddrR;
+                    EnTx <= not UartBusy;
+
+                    if UartBusy = '0' then
+                        RdProcSt <= RdSt;
+                    end if;
+                when RdSt =>
+                    if (not Sel and AvRdDv) = '1' then
+                        DataTx <= AvRdData;
+                    end if;
+
+                    EnTx <= not Sel and AvRdDv;     -- what about uart busy?
+                    IncAddrR <= not Sel and AvRdDv;
+                    AvRdRq <= IncAddrR;
+
+                    if IncAddrR = '1' then
+                        AvAddrR <= AvAddrR + '1';
+                        RdCnt <= RdCnt + '1';
+                    end if;
+
+                    if RdCnt = RdCntMax and IncAddrR = '1' then
+                         RdProcSt <= Idle;
+                    end if;
+                when others =>
+                    null;
+            end case;
+        end if;
+    end process;
+
+--    AvAddr <= AvAddrInt;
+
+    avmm_access_proc:
+    process(Clk)
+    begin
+        if rising_edge(Clk) then
+            null;
+        end if;
+    end process;
+
 end beh1;

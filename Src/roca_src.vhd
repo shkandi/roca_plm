@@ -7,7 +7,9 @@ USE ieee.std_logic_arith.all;
 package roca_src is
 
 type arr_26 is array(0 to 25) of std_logic_vector(7 downto 0);
-type arr_256 is array (0 to 255) of std_logic_vector (7 downto 0);
+type arr_64 is array (0 to 63) of std_logic_vector (7 downto 0);
+
+type arr_mark is array (0 to 20) of std_logic_vector (15 downto 0);
 
 end roca_src;
 
