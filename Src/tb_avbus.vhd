@@ -12,12 +12,15 @@ end tb_avbus;
 
 architecture sim1 of tb_avbus is
     signal Clk: std_logic := '0';
+    signal Rst: std_logic := '1';
 
     signal UartRxD: std_logic_vector(7 downto 0);
     signal UartRxE: std_logic;
     signal UartTxD: std_logic_vector(7 downto 0);
     signal UartTxE: std_logic;
-    signal UartBusy: std_logic;
+    signal UartBusy: std_logic := '0';
+    signal UartBusyTest: std_logic := '0';
+    signal RxDone: std_logic := '1';
 
     signal AvAddrM: std_logic_vector(5 downto 0);  
     signal AvWrDataM: std_logic_vector(7 downto 0);
@@ -38,9 +41,10 @@ architecture sim1 of tb_avbus is
 begin
    
     Clk <= not Clk after 10 ns;
+    Rst <= '0' after 17 ns;
 
     -- to speedup tests delay between bytes is 100 ns;
-    -- uart rx
+    -- uart tx
     process
         file tv: text;
         variable L: line;
@@ -52,9 +56,13 @@ begin
         while not endfile(tv) loop
             readline(tv, L);
             hread(L, vFrame);
-            vCntF := 2 + conv_integer(vFrame(139 downto 136));
+            if vFrame(135 downto 134) /= "00" then
+                vCntF := 2 + conv_integer(vFrame(139 downto 136));
+            else
+                vCntF := 2;
+            end if;
             UartRxE <= '0';
-
+    
             for i in 0 to vCntF loop
                 wait until rising_edge(Clk);
                 UartRxD <= vFrame(143 downto 136);
@@ -66,42 +74,64 @@ begin
                 wait until rising_edge(Clk);
                 wait until rising_edge(Clk);
                 wait until rising_edge(Clk);
+                while RxDone = '0' loop
+                    wait until rising_edge(Clk);
+                end loop;
             end loop;
-
        end loop;
 
-       -- stop;
        wait;
     end process;
 
+    -- uart rx
     process(Clk)
         variable vState: integer := 0;
-        variable vCnt: integer := 0;
+        variable vCnt4: integer := 0;
+        variable vCntF: integer;
+        variable vCnt16: integer;
     begin
         if rising_edge(Clk) then
             case vState is
                 when 0 =>
                     if UartTxE = '1' then
                         vState := 1;
+                        vCntF := 2 + conv_integer(UartTxD(3 downto 0));
+                        RxDone <= '0';
+                    else
+                        RxDone <= '1';
                     end if;
                     
-                    UartBusy <= UartTxE;
-                    vCnt := 0;
+                    UartBusyTest <= UartTxE;
+                    vCnt4 := 0;
+                    vCnt16 := 0;
                 when 1 =>
-                    if vCnt = 4 then
-                        vState := 0;
-                        UartTxE <= '0';
+                    if vCnt4 = 4 then
+                        vCnt16 := vCnt16 + 1;
+                        vState := 2;
+                        UartBusyTest <= '0';
                     end if;
 
-                    vCnt := vCnt + 1;
+                    vCnt4 := vCnt4 + 1;
+                when 2 =>
+                    if UartTxE = '1' then
+                        if vCnt16 = vCntF then
+                            vState := 0;
+                        else
+                            vState := 1;
+                        end if;
+                    end if;
+                    vCnt4 := 0;
+                    UartBusyTest <= UartTxE;
                 when others =>
                     null;
             end case;    
         end if;
     end process;
 
+    UartBusy <= UartBusyTest or UartTxE;
+
     AvUart_uut:
-    entity work.AvUart
+    entity work.AvUartHD
     port map(
         AvAddr              => AvAddrM,            -- : out std_logic_vector(7 downto 0);
         AvWrData            => AvWrDataM,            -- : out std_logic_vector(7 downto 0);
@@ -110,6 +140,7 @@ begin
         AvRdRq              => AvRdRqM,            -- : out std_logic;
         AvWaitRq            => '0',            -- : in std_logic;
         AvRdDv              => AvRdDvM,            -- : in std_logic;
+        Rst                 => Rst,
         Clk                 => Clk,            -- : in std_logic;
         UartBusy            => UartBusy,
         DataRx              => UartRxD,            -- : in std_logic_vector(7 downto 0);
