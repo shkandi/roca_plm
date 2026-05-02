@@ -7,8 +7,8 @@ entity AvTest is
 	port(
 		UartRx	: in std_logic;
 		UartTx	: out std_logic;
-		Clk		: in std_logic
-		-- Led		: out std_logic
+		Clk		: in std_logic;
+		Led		: out std_logic
 	);
 end AvTest;
 
@@ -88,9 +88,9 @@ architecture beh1 of AvTest is
     );
     end component TestMem;
 
-	signal Cnt: std_logic_vector(25 downto 0);
-    signal Clk50: std_logic;
+	signal Cnt50: std_logic_vector(25 downto 0);
     signal PllLocked: std_logic;
+    signal Clk50: std_logic;
     signal Rst: std_logic;
 	
 	signal UartRxD: std_logic_vector(7 downto 0);
@@ -137,7 +137,7 @@ begin
 	uart
     generic map(
         pFreq           => 50000000,			-- : integer := 50000000;
-        pBaudRate       => 1			-- : integer := 9600
+        pBaudRate       => 115200			-- : integer := 9600
     )
     port map(
         DataIn          => UartTxD,				-- : in std_logic_vector(7 downto 0);
