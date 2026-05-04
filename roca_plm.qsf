@@ -68,4 +68,14 @@ set_location_assignment PIN_23 -to UartRx
 set_location_assignment PIN_10 -to UartTx
 set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to UartRx
 set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to UartTx
+set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to PwmOut
+set_instance_assignment -name IO_STANDARD "3.3-V LVCMOS" -to PolOut
+set_location_assignment PIN_144 -to PwmOut[0]
+set_location_assignment PIN_142 -to PwmOut[1]
+set_location_assignment PIN_138 -to PwmOut[2]
+set_location_assignment PIN_136 -to PwmOut[3]
+set_location_assignment PIN_143 -to PolOut[0]
+set_location_assignment PIN_141 -to PolOut[1]
+set_location_assignment PIN_137 -to PolOut[2]
+set_location_assignment PIN_135 -to PolOut[3]
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

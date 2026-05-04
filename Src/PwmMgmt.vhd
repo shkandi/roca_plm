@@ -15,7 +15,8 @@ entity PwmMgmt is
         AvRdVal         : out std_logic;
         CmpEn           : in std_logic;
         Clk             : in std_logic;
-        PwmOut          : out std_logic_vector(pOutputs - 1 downto 0)
+        PwmOut          : out std_logic_vector(pOutputs - 1 downto 0);
+        PolOut          : out std_logic_vector(pOutputs - 1 downto 0)
     );
 end PwmMgmt;
 
@@ -70,6 +71,8 @@ begin
 
                     AvRdData <= PwmMask(conv_integer(AvAddr(2 downto 0)));
             end case;
+            
+            AvRdVal <= AvRdRq;
 
             if CmpEn = '1' then
                 dSwReg <= SwReg;
@@ -99,9 +102,11 @@ begin
                     vTmp := (not PwmCnt(j) or PwmMask(i)(j)) and vTmp;
                 end loop;
 
-                PwmOut(i) <= vTmp and EnReg(i) and nForceStop;
+                PwmOut(i) <= vTmp and EnReg(i); -- and nForceStop;
             end loop;
         end if;
     end process;
 
+    PolOut <= PolarityReg(pOutputs - 1 downto 0);
+    
 end beh1;

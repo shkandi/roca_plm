@@ -8,7 +8,8 @@ entity AvTest is
 		UartRx	: in std_logic;
 		UartTx	: out std_logic;
 		Clk		: in std_logic;
-		Led		: out std_logic
+        PwmOut  : out std_logic_vector(3 downto 0);
+		PolOut  : out std_logic_vector(3 downto 0)
 	);
 end AvTest;
 
@@ -87,8 +88,39 @@ architecture beh1 of AvTest is
         Clk             : in std_logic
     );
     end component TestMem;
+    
+    component PwmMgmt is
+        generic(
+            pOutputs        : integer range 1 to 8:= 1
+        );
+        port(
+            AvAddr          : in std_logic_vector(3 downto 0);
+            AvWrData        : in std_logic_vector(7 downto 0);
+            AvRdData        : out std_logic_vector(7 downto 0);
+            AvWrRq          : in std_logic;
+            AvRdRq          : in std_logic;
+            AvRdVal         : out std_logic;
+            CmpEn           : in std_logic;
+            Clk             : in std_logic;
+            PwmOut          : out std_logic_vector(pOutputs - 1 downto 0);
+            PolOut          : out std_logic_vector(pOutputs - 1 downto 0)
+        );
+    end component PwmMgmt;
+    
+    component MainInfo is
+    port(
+        AvAddr          : in std_logic_vector(3 downto 0);
+        AvWrData        : in std_logic_vector(7 downto 0);
+        AvRdData        : out std_logic_vector(7 downto 0);
+        AvWrRq          : in std_logic;
+        AvRdRq          : in std_logic;
+        AvRdVal         : out std_logic;
+        Clk             : in std_logic;
+        RstOut          : out std_logic
+    );
+    end component MainInfo;
 
-	signal Cnt50: std_logic_vector(25 downto 0);
+	signal Cnt: std_logic_vector(25 downto 0);
     signal PllLocked: std_logic;
     signal Clk50: std_logic;
     signal Rst: std_logic;
@@ -112,16 +144,16 @@ architecture beh1 of AvTest is
     signal AvWrRqS: std_logic_vector(3 downto 0);  
     signal AvRdRqS: std_logic_vector(3 downto 0);  
     signal AvRdDvS: std_logic_vector(3 downto 0);
-    
+    signal CmpEn: std_logic;
 begin
 	
---	process(Clk)
---	begin
---		if rising_edge(Clk) then
---			Led <= Cnt(Cnt'left);
---			Cnt <= Cnt + '1';
---		end if;
---	end process;
+	process(Clk)
+	begin
+		if rising_edge(Clk) then
+			CmpEn <= Cnt(Cnt'left);
+			Cnt <= Cnt + '1';
+		end if;
+	end process;
 	
     clock_main: 
     clock_pll  
@@ -187,8 +219,41 @@ begin
         Clk         => Clk50            -- : in std_logic
     );
     
+    MainInfo_ent:
+    MainInfo
+    port map(
+        AvAddr          => AvAddrS,            -- : in std_logic_vector(3 downto 0);
+        AvWrData        => AvWrDataS,            -- : in std_logic_vector(7 downto 0);
+        AvRdData        => AvRdDataS(7 downto 0),            -- : out std_logic_vector(7 downto 0);
+        AvWrRq          => AvWrRqS(0),            -- : in std_logic;
+        AvRdRq          => AvRdRqS(0),            -- : in std_logic;
+        AvRdVal         => AvRdDvS(0),            -- : out std_logic;
+        Clk             => Clk50,            -- : in std_logic;
+        RstOut          => open            -- : out std_logic
+    );
+    
+    
+    PwmMgmt_ent:
+    PwmMgmt
+    generic map(
+        pOutputs        => 4        -- : integer range 1 to 8:= 1
+    )
+    port map(
+        AvAddr          => AvAddrS,            -- : in std_logic_vector(3 downto 0);
+        AvWrData        => AvWrDataS,            -- : in std_logic_vector(7 downto 0);
+        AvRdData        => AvRdDataS(15 downto 8),            -- : out std_logic_vector(7 downto 0);
+        AvWrRq          => AvWrRqS(1),            -- : in std_logic;
+        AvRdRq          => AvRdRqS(1),            -- : in std_logic;
+        AvRdVal         => AvRdDvS(1),            -- : out std_logic;
+        CmpEn           => CmpEn,            -- : in std_logic;
+        Clk             => Clk50,            -- : in std_logic;
+        PwmOut          => PwmOut,            -- : out std_logic_vector(pOutputs - 1 downto 0)
+        PolOut          => PolOut             -- : out std_logic_vector(pOutputs - 1 downto 0)
+    );
+    
+    
     test_mem_gen:
-    for i in 0 to 3 generate
+    for i in 2 to 3 generate
     begin
         TestMem_ent:
         TestMem
