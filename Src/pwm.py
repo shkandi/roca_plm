@@ -31,5 +31,5 @@ for i in range(1, 9):
     ca = 1 << 6 | 1 << 4 | 8
     d = 2**i - 1
     frwr = b'\xA0' + ca.to_bytes(1, 'big') + d.to_bytes(1, 'big')
-
+    ser.write(frwr)
 ser.close()

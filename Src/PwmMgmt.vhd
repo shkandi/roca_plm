@@ -92,7 +92,8 @@ begin
                 else
                     PwmCnt <= PwmCnt(PwmCnt'left - 1 downto 0) & "1";
                 end if;
-            elsif nForceStop = '1' then
+            -- elsif nForceStop = '1' then
+            else
                 DivCnt <= DivCnt + '1';
             end if;
 
