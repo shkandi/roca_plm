@@ -84,12 +84,12 @@ begin
             if DivCnt = DivCntMax then
                 DivCnt <= (others => '0');
 
-                if PwmCnt(0) = '1' then
-                    PwmCnt <= (others => '0');
+                if PwmCnt(PwmCnt'left) = '1' then
+                    PwmCnt <= x"01";
                 else
-                    PwmCnt <= "1" & PwmCnt(PwmCnt'left downto 1);
+                    PwmCnt <= PwmCnt(PwmCnt'left - 1 downto 0) & "1";
                 end if;
-            else
+            elsif nForceStop = '1' then
                 DivCnt <= DivCnt + '1';
             end if;
 
@@ -99,7 +99,7 @@ begin
                     vTmp := (not PwmCnt(j) or PwmMask(i)(j)) and vTmp;
                 end loop;
 
-                PwmOut(i) <= vTmp and EnReg(i);
+                PwmOut(i) <= vTmp and EnReg(i) and nForceStop;
             end loop;
         end if;
     end process;

@@ -36,7 +36,10 @@ architecture sim1 of tb_avbus is
     signal AvRdRqS: std_logic_vector(3 downto 0);  
     signal AvRdDvS: std_logic_vector(3 downto 0);  
 
-
+    signal PwmData: std_logic_vector(7 downto 0);
+    signal PwmAddr: std_logic_vector(3 downto 0);
+    signal PwmWr: std_logic;
+    signal PwmCmp: std_logic;
 
 begin
    
@@ -183,5 +186,71 @@ begin
             Clk             => Clk                -- : in std_logic
         );
     end generate;
+
+    process(Clk)
+        variable vState: integer := 0;
+        variable vCnt: integer := 0;
+        variable vSwData: std_logic_vector(7 downto 0) := x"00";
+    begin
+        if rising_edge(Clk) then
+            case vState is
+                when 0 =>
+                    PwmData <= x"00";
+                    PwmAddr <= x"1";
+                    PwmWr <= '1';
+                    PwmCmp <= '0';
+                    vState := 1;
+                when 1 =>
+                    PwmData <= x"01";
+                    PwmAddr <= x"2";
+                    PwmWr <= '1';
+                    vState := 2;
+                when 2 =>
+                    PwmData <= x"3F";
+                    PwmAddr <= x"8";
+                    PwmWr <= '1';
+                    vState := 3;
+                when 3 =>
+                    PwmWr <= '0';
+                    vState := 4;
+                when others =>
+                    if vCnt = 23 then
+                        vCnt := 0;
+                        PwmCmp <= '1';
+                        PwmWr <= '1';
+                        PwmAddr <= x"0";
+                        PwmData <= vSwData;
+                        vSwData := not vSwData;
+                    else
+                        PwmWr <= '0';
+                        PwmCmp <= '0';
+                        PwmWr <= '0';
+                        vCnt := vCnt + 1;
+                    end if;
+            end case;
+        end if;
+    end process;
+
+
+    PwmMgmt_uut:
+    entity work.PwmMgmt
+    generic map(
+        pOutputs        => 1            --- : integer range 1 to 8:= 1
+    )
+    port map(
+        AvAddr          => PwmAddr,            -- : in std_logic_vector(3 downto 0);
+        AvWrData        => PwmData,            -- : in std_logic_vector(7 downto 0);
+        AvRdData        => open,            -- : out std_logic_vector(7 downto 0);
+        AvWrRq          => PwmWr,            -- : in std_logic;
+        AvRdRq          => '0',            -- : in std_logic;
+        AvRdVal         => open,            -- : out std_logic;
+        CmpEn           => PwmCmp,            -- : in std_logic;
+        Clk             => Clk,            -- : in std_logic;
+        PwmOut          => open            -- : out std_logic_vector(pOutputs - 1 downto 0)
+    );
+
+
+
+
 
 end sim1;
