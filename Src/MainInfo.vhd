@@ -1,7 +1,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 
--- need to add package with version iterable by tcl script
+use work.pck_roca.all;
 
 entity MainInfo is
     port(
@@ -18,9 +18,6 @@ end MainInfo;
 
 architecture beh1 of MainInfo is
     constant cDevId: std_logic_vector(7 downto 0) := x"CF";
-    constant cVerMaj: std_logic_vector(7 downto 0) := x"01";
-    constant cVerMin: std_logic_vector(7 downto 0) := x"02";
-
     signal RstRg: std_logic_vector(7 downto 0);
 begin
     process(Clk)

@@ -76,7 +76,7 @@ begin
                             WrOp <= DataRx(7 downto 6);
                         end if;
 
-                        DataTx <= x"A" & CntMaxRg;
+                        DataTx <= x"B" & CntMaxRg;
                     when OpSt =>
                         AvRdRq <= '0';
 

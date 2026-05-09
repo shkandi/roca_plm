@@ -23,7 +23,7 @@ frwr = b'\xA0' + ca.to_bytes(1, 'big') + b'\x00'
 ser.write(frwr)
 
 ca = 1 << 6 | 1 << 4 | 1
-frwr = b'\xA1' + ca.to_bytes(1, 'big') + b'\x80' + b'\x01'
+frwr = b'\xA1' + ca.to_bytes(1, 'big') + b'\xF0' + b'\x01'
 ser.write(frwr)
 
 for i in range(1, 9):

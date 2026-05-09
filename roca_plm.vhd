@@ -3,7 +3,7 @@ use ieee.std_logic_1164.all;
 use ieee.std_logic_unsigned.all;
 
 
-entity AvTest is
+entity roca_plm is
 	port(
 		UartRx	: in std_logic;
 		UartTx	: out std_logic;
@@ -11,9 +11,9 @@ entity AvTest is
         PwmOut  : out std_logic_vector(3 downto 0);
 		PolOut  : out std_logic_vector(3 downto 0)
 	);
-end AvTest;
+end roca_plm;
 
-architecture beh1 of AvTest is
+architecture beh1 of roca_plm is
 	
     component clock_pll 
     port (
@@ -124,7 +124,8 @@ architecture beh1 of AvTest is
     signal PllLocked: std_logic;
     signal Clk50: std_logic;
     signal Rst: std_logic;
-	
+    
+	signal UartRxRg: std_logic;
 	signal UartRxD: std_logic_vector(7 downto 0);
     signal UartRxE: std_logic;
     signal UartTxD: std_logic_vector(7 downto 0);
@@ -165,6 +166,8 @@ begin
     
     Rst <= not PllLocked;
     
+    UartRxRg <= UartRx when rising_edge(Clk50);
+    
 	uart_ent:
 	uart
     generic map(
@@ -175,7 +178,7 @@ begin
         DataIn          => UartTxD,				-- : in std_logic_vector(7 downto 0);
         EnIn            => UartTxE,				-- : in std_logic;
         Clk             => Clk50,				-- : in std_logic;
-        Rx              => UartRx,				-- : in std_logic;
+        Rx              => UartRxRg,				-- : in std_logic;
         Tx              => UartTx,				-- : out std_logic;
         TxBusy          => UartBusy,				-- : out std_logic;
         DataOut         => UartRxD,				-- : out std_logic_vector(7 downto 0);
