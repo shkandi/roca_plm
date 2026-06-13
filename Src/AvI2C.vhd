@@ -24,48 +24,77 @@ end AvI2C;
 architecture beh1 of AvI2C is
     type DataBufType is array(7 downto 0) of std_logic_vector(7 downto 0);
     signal DataBuf: DataBufType;
-    signal DataBufIn: std_logic_vector(7 downto 0);
-    signal DataBufOut: std_logic_vector(7 downto 0);
+    signal A_Buf: std_logic_vector(2 downto 0);
+    signal D_Buf: std_logic_vector(7 downto 0);
+    signal W_Buf: std_logic;
+    signal Q_Buf: std_logic_vector(7 downto 0);
+    signal Sel_Buf: std_logic; 
+    signal std_logic_vector(2 downto 0); 
 
     signal Status: std_logic_vector(7 downto 0);
     signal DevAddr: std_logic_vector(7 downto 0);
     signal RegAddr: std_logic_vector(7 downto 0);
-
-    signal dAvRdRq: std_logic;
 begin
 
     process(Clk)
     begin
         if rising_edge(Clk) then
-            dAvRdRq <= AvRdRq;
+            AvRdVal <= AvRdRq;
+            CmdVal <= '0';
+            CmdReg <= AvWrData;
 
             case AvAddr is
                 when x"8" =>
-                    AvRdData <= DevAddr;
-                    AvRdVal <= AvRdRq;
-                when x"9" =>
-                    AvRdData <= RegAddr;
-                    AvRdVal <= AvRdRq;
-                when x"A" =>
-                    AvRdData <= StatusReg;
-                    AvRdVal <= AvRdRq;
-                when others =>
-                    AvRdData <= DataBufOut;
-                    AvRdVal <= dAvRdRq;
-            end case;
+                    if AvWrRq = '1' then
+                        DevAddr <= AvWrData;
+                    end if;
 
+                    AvRdData <= DevAddr;
+                when x"9" =>
+                    if AvWrRq = '1' then
+                        RegAddr <= AvWrData;
+                    end if;
+
+                    AvRdData <= RegAddr;
+                when x"A" =>
+                    CmdVal <= AvWrRq;
+                    AvRdData <= Status;
+                when others =>
+                    if AvWrRq = '1' then
+                        TdDataBuf(conv_integer(AvAddr(3 downto 0))) <= AvWrData;
+                    end if;
+
+                    AvRdData <= Q_Buf;
+            end case;
+            
+            case State is
+                when Idle =>
+                    Sel_Buf <= '0';
+                    if CmdVal = '1' then
+                        State <= WrDev;
+                    end if;
+                when WrDev =>
+                    Sel_Buf <= '0';
+                when others =>
+                    null;
+            end case;
         end if;
     end process;
 
+    A_Buf <= when Sel_Buf = '1' else AvAddr(2 downto 0);
+    D_Buf <= when Sel_Buf = '1' else AvWrData;
+    W_Buf <= when Sel_Buf = '1' else (not (vAddr(3) and AvWrRq);
+    
     process(Clk)
     begin
         if rising_edge(Clk) then
-            if WrBuf = '1' then
-                DataBuf(conv_integer(AddrBuf)) <= DataBufIn;
+            if W_Buf = '1' then
+                DataBuf(conv_integer(A_Buf)) <= D_Buf;
             end if;
 
-            DataBufOut <= DataBuf(conv_integer(AddrBuf));
+            Q_Buf <= DataBuf(conv_integer(A_Buf));
         end if;
     end process;
+
 
 end beh1;
