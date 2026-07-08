@@ -29,7 +29,9 @@ architecture beh1 of AvI2C is
     signal W_Buf: std_logic;
     signal Q_Buf: std_logic_vector(7 downto 0);
     signal Sel_Buf: std_logic; 
-    signal std_logic_vector(2 downto 0); 
+    signal TwiAddr: std_logic_vector(2 downto 0); 
+    signal TwiData: std_logic_vector(7 downto 0);
+    signal TwiWrRq: std_logic;
 
     signal Status: std_logic_vector(7 downto 0);
     signal DevAddr: std_logic_vector(7 downto 0);
@@ -58,32 +60,36 @@ begin
                     AvRdData <= RegAddr;
                 when x"A" =>
                     CmdVal <= AvWrRq;
+
                     AvRdData <= Status;
                 when others =>
-                    if AvWrRq = '1' then
-                        TdDataBuf(conv_integer(AvAddr(3 downto 0))) <= AvWrData;
-                    end if;
-
                     AvRdData <= Q_Buf;
             end case;
             
             case State is
                 when Idle =>
+                    TwiAddr <= "000";
+                    TwiWrRq <= '0';
+                    DataM2S <= DevAddr;
+                    Cs <= '0';
+                    nWr <= '0';
                     Sel_Buf <= '0';
                     if CmdVal = '1' then
+                        
                         State <= WrDev;
                     end if;
                 when WrDev =>
                     Sel_Buf <= '0';
+                    DataM2S <= DevAddr;
                 when others =>
                     null;
             end case;
         end if;
     end process;
 
-    A_Buf <= when Sel_Buf = '1' else AvAddr(2 downto 0);
-    D_Buf <= when Sel_Buf = '1' else AvWrData;
-    W_Buf <= when Sel_Buf = '1' else (not (vAddr(3) and AvWrRq);
+    A_Buf <= TwiAddr when Sel_Buf = '1' else AvAddr(2 downto 0);
+    D_Buf <= TwiData when Sel_Buf = '1' else AvWrData;
+    W_Buf <= TwiWrRq when Sel_Buf = '1' else (not AvAddr(3) and AvWrRq);
     
     process(Clk)
     begin
@@ -95,6 +101,5 @@ begin
             Q_Buf <= DataBuf(conv_integer(A_Buf));
         end if;
     end process;
-
 
 end beh1;

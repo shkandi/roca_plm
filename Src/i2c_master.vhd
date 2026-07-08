@@ -14,8 +14,10 @@ entity i2c_master is
 		ackd					: out std_logic;
 		busy					: out std_logic;
 		ack_err					: out std_logic;
-		SDA						: inout std_logic;
-		SCL						: inout std_logic
+		sda						: in std_logic;
+		sda_oe  				: out std_logic;
+		scl						: in std_logic;
+		scl_oe  				: out std_logic
 	);
 end i2c_master;
 
@@ -26,13 +28,12 @@ architecture beh1 of i2c_master is
 	signal DCntSR: std_logic_vector(7 downto 0);
 	signal I2CRxData: std_logic_vector(7 downto 0);
 	signal I2CTxData: std_logic_vector(7 downto 0);
-	signal SCL_clk: std_logic;
-	signal SCL_en: std_logic;
-	signal SCL_state: std_logic_vector(1 downto 0);
-	signal SCL_hh: std_logic;
-	signal SCL_hl: std_logic;
+	signal scl_clk: std_logic;
+	signal scl_en: std_logic;
+	signal scl_state: std_logic_vector(1 downto 0);
+	signal scl_hh: std_logic;
+	signal scl_hl: std_logic;
 	signal strech: std_logic;
-	signal SDA_out: std_logic;
 	signal nWrCmd: std_logic;
 	signal busy_int: std_logic;
 	
@@ -41,8 +42,7 @@ architecture beh1 of i2c_master is
 	
 begin
 	
-	SCL <= '0' when (SCL_clk = '0' and SCL_en = '1') else 'Z';
-	SDA <= '0' when SDA_Out = '0' else 'Z';
+	scl_oe <= not scl_clk and scl_en;
 	
 	process(clk)
 		variable count : integer range 0 to 4*divider;
@@ -54,40 +54,40 @@ begin
 				count := count + 1;
 			end if;
 
-			if SCL_state(1) = '1' and SCL = '0' then
+			if scl_state(1) = '1' and scl = '0' then
 				strech <= '1';
 			else
 				strech <= '0';
 			end if;
 			
-			SCL_hl <= '0';
-			SCL_hh <= '0';
+			scl_hl <= '0';
+			scl_hh <= '0';
 			case count is
 				when 0  =>
-					SCL_state <= "00";
+					scl_state <= "00";
 				when 32 =>
-					SCL_hl <= '1';
-					SCL_state <= "01";
+					scl_hl <= '1';
+					scl_state <= "01";
 				when 64 =>
-					SCL_state <= "10";
+					scl_state <= "10";
 				when 96 =>
-					SCL_hh <= '1';
-					SCL_state <= "11";
+					scl_hh <= '1';
+					scl_state <= "11";
 				when others =>
 					null;
 			end case;
 		end if;
 	end process;
 	
-	SCL_clk <= SCL_state(1);
+	scl_clk <= scl_state(1);
 	
 	process(clk)
 	begin
 		if rising_edge(clk) then
 			case State is
 				when StandBy =>
-					SDA_Out <= '1';
-					SCL_en <= '0';
+					sda_oe <= '0';
+					scl_en <= '0';
 					ackd <= cs;
 					busy <= '0';
 					
@@ -103,37 +103,38 @@ begin
 					
 					DCntSR <= (others => '0');
 					
-					if SCL_hh = '1' then
-						SDA_out <= '0';
-						SCL_en <= '1';
+					if scl_hh = '1' then
+						sda_oe <= '1';
+						scl_en <= '1';
 						State <= WriteByte;
 					end if;
 				when WriteByte =>
 					ackd <= '0';
 					busy <= '1';
 					
-					if SCL_hl = '1' then
-						SDA_out <= I2CTxData(7);
+					if scl_hl = '1' then
+						sda_oe <= not I2CTxData(7);
 					end if;
 					
-					if SCL_hh = '1' then
+					if scl_hh = '1' then
 						DCntSR <= DCntSR(6 downto 0) & "1";
 						I2CTxData <= I2CTxData(6 downto 0) & "1";
 					end if;
 					
-					if DCntSR(DCntSR'left) = '1' and SCL_hl = '1' then
+					if DCntSR(DCntSR'left) = '1' and scl_hl = '1' then
 						State <= ReadAck;
 					end if;
 				when ReadAck =>
 					busy <= '1';
+                    sda_oe <= '0';
 					
 					DCntSR <= (others => '0');
 					
-					if SCL_hh = '1' then
-						ack_err <= SDA;
-						ackd <= not (SDA or nWrCmd);
+					if scl_hh = '1' then
+						ack_err <= sda;
+						ackd <= not (sda or nWrCmd);
 
-						if SDA = '0' and cs = '1' then
+						if sda = '0' and cs = '1' then
 							nWrCmd <= wr_n;
 							if wr_n = '1' then
 								if nWrCmd = '0' then
@@ -153,12 +154,12 @@ begin
 					ackd <= '0';
 					busy <= '1';
 					
-					if SCL_hl = '1' then
-						SDA_Out <= '1';
+					if scl_hl = '1' then
+						sda_oe <= '0';
 					end if;
 					
-					if SCL_hh = '1' then
-						I2CRxData <= I2CRxData(6 downto 0) & (SDA and '1');
+					if scl_hh = '1' then
+						I2CRxData <= I2CRxData(6 downto 0) & (sda and '1');
 						DCntSR <= DCntSR(6 downto 0) & "1";
 					end if;
 					
@@ -168,14 +169,14 @@ begin
 					end if;
 				when WriteAck =>
 					DCntSR <= (others => '0');
-					ackd <= SCL_hh;
+					ackd <= scl_hh;
 					busy <= '1';
 					
-					if SCL_hl = '1' then
-						SDA_out <= not cs;
+					if scl_hl = '1' then
+						sda_oe <= cs;
 					end if;
 					
-					if SCL_hh = '1' then
+					if scl_hh = '1' then
 						if cs = '1' then
 							State <= ReadByte;
 						else
@@ -186,11 +187,11 @@ begin
 					ackd <= '0';
 					busy <= '1';
 					
-					if SCL_hl = '1' then
-						SDA_out <= '0';
-					elsif SCL_hh = '1' then
-						SCL_en <= '0';
-						SDA_out <= '1';
+					if scl_hl = '1' then
+						sda_oe <= '1';
+					elsif scl_hh = '1' then
+						scl_en <= '0';
+						sda_oe <= '0';
 						State <= StandBy;
 					end if;
 				when others =>
